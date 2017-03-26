@@ -9,6 +9,14 @@ playerData
 seasonData <- read.csv("data/season_logs.csv")
 seasonData
 
-mergedData <- merge(playerData, seasonData, by = "game_id")
-mergedData
-
+econData <- read.csv("data/cleaned-econ-data.csv")
+econData['CountryName']
+econData['Year']
+econData['Population..total']
+ubPresent <- subset(econData, econData[,'Population..total_present'] == 1)
+dim(ubPresent)
+preds = subset(ubPresent, select = -c(Population..total))
+options(max.print=5.5E5)
+head(ubPresent)
+initialFit = glm(Population..total~., data=ubPresent)
+initialFit
