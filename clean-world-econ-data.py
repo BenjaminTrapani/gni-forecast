@@ -7,6 +7,8 @@ pd.set_option('max_rows', 2500)
 output_col_name = 'GNI per capita (constant 2005 US$)'
 min_observations = 1000
 
+# the indicators file can be found here: https://www.kaggle.com/worldbank/world-development-indicators
+
 with open('data/econ-indicators.csv') as indicators_file:
     indicators_df = pd.read_csv(indicators_file)
     grouped_indicators = pd.groupby(indicators_df, ['CountryName', 'Year'])
