@@ -1,11 +1,12 @@
 import pandas as pd
 import numpy as np
 import itertools
-import os
+import argparse
 from fancyimpute import KNN
 
 pd.set_option('display.max_columns', 2500)
 pd.set_option('max_rows', 2500)
+
 
 # the indicators file can be found here: https://www.kaggle.com/worldbank/world-development-indicators
 
@@ -84,14 +85,13 @@ def prune_results_by_target(input_df, output_col_name, output_next_suffix, min_o
             else:
                 input_df = non_nuls_in_col
 
+    next_output_col_name = output_col_name + output_next_suffix
     input_df = input_df.sort_values(by=['CountryName', 'Year'])
-    input_df['next_gni_per_capita'] = np.NaN
+    input_df[next_output_col_name] = np.NaN
     result_cpy = input_df.copy()
     cur_row, next_row = itertools.tee(result_cpy.iterrows())
     next(next_row, None)
     zip_iter = zip(cur_row, next_row)
-
-    next_output_col_name = output_col_name + output_next_suffix
 
     for (idx, row_1_data), (_, row_2_data) in zip_iter:
         row_1_year = row_1_data['Year']
@@ -111,8 +111,8 @@ def prune_results_by_target(input_df, output_col_name, output_next_suffix, min_o
     return input_df
 
 
-#Use KNN to impute missing values
-def impute_missing_data(input_df):
+# Use KNN to impute missing values
+def impute_missing_data(input_df, min_obs):
     # Drop all null columns up front
     for col in input_df:
         non_nuls_in_col = input_df[input_df[col].notnull()]
@@ -120,7 +120,7 @@ def impute_missing_data(input_df):
             input_df = input_df.drop(col, 1)
 
     df_mat = input_df.drop(['CountryName', 'Year'], 1).as_matrix()
-    filled_mat = KNN(k=10).complete(df_mat)
+    filled_mat = KNN(k=min_obs).complete(df_mat)
     retval_cols = input_df.columns.values
     retval_cols = list(filter(lambda x: x != 'CountryName' and x != 'Year', retval_cols))
     ret_df = pd.DataFrame(filled_mat, columns=retval_cols)
@@ -129,25 +129,36 @@ def impute_missing_data(input_df):
     return ret_df
 
 
-param_file_name = 'data/econ-indicators.csv'
-param_output_col_name = 'GNI per capita (constant 2005 US$)'
-param_output_next_suffix = '_next'
-param_min_observations = 10
-param_desired_consecutive_years = 10
-param_null_handling_mode = 'IMPUTE' #one of DROP, IMPUTE, IGNORE
-param_output_file_name = 'cleaned-econ-data.csv'
+arg_parser = argparse.ArgumentParser('Clean economic indicator data')
+arg_parser.add_argument('--file', help='the path to the original indicator csv file', required=True)
+arg_parser.add_argument('--output-col-name', help='output column to filter rows by', required=True)
+arg_parser.add_argument('--output-next-suffix', help='suffix of output column for next year', required=True)
+arg_parser.add_argument('--min-observations', help='the minimum number of observations required to preserve indicator',
+                        required=True)
+arg_parser.add_argument('--desired-consecutive-years', help='The number of consecutive years required for all '
+                                                            'countries to have data for. The algorithm will pick the '
+                                                            'years such that the most countries are contained',
+                        required=True)
+arg_parser.add_argument('--null-handling-mode', help='How null should be handled (DROP, IMPUTE, IGNORE)', required=True)
+arg_parser.add_argument('--output-file-name', help='Output file for cleaned CSV', required=True)
+args = arg_parser.parse_args()
+args = vars(args)
+
+param_file_name = args['file'] #'data/econ-indicators.csv'
+param_output_col_name = args['output_col_name'] #'GNI per capita (constant 2005 US$)'
+param_output_next_suffix = args['output_next_suffix']#'_next'
+param_min_observations = int(args['min_observations']) #10
+param_desired_consecutive_years = int(args['desired_consecutive_years']) #10
+param_null_handling_mode = args['null_handling_mode'] #'IMPUTE' #one of DROP, IMPUTE, IGNORE
+param_output_file_name = args['output_file_name'] #'cleaned-econ-data.csv'
 
 result_df = get_raw_data_frame(param_file_name)
 result_df = prune_results_by_target(result_df, param_output_col_name, param_output_next_suffix, param_min_observations,
                                     param_null_handling_mode == 'DROP')
 
-gnis_by_country_year = pd.DataFrame(result_df, columns=['CountryName', 'Year', param_output_col_name,
-                                                        param_output_col_name + param_output_next_suffix])
-print(gnis_by_country_year)
-
 result_df = get_countries_with_overlapping_consecutive_years(result_df, param_desired_consecutive_years)
 
 if param_null_handling_mode == 'IMPUTE':
-    result_df = impute_missing_data(result_df)
+    result_df = impute_missing_data(result_df, param_min_observations)
 
-result_df.to_csv(os.path.join('data', param_output_file_name), index=False)
+result_df.to_csv(param_output_file_name, index=False)
