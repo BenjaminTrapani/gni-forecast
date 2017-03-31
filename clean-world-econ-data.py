@@ -40,7 +40,7 @@ def get_countries_with_overlapping_consecutive_years(input_df, min_consecutive_y
                 countries_in_interval.add(country_name)
 
         if len(countries_in_interval) > len(best_interval_countries):
-            best_interval_start = lower_year
+            best_interval_start = lower_year + 1
             best_interval_end = year
             best_interval_countries = countries_in_interval
 
@@ -129,6 +129,20 @@ def impute_missing_data(input_df, min_obs):
     return ret_df
 
 
+def partition_validation_set(input_df, validation_percentage):
+    rows_in_validation_set = int((len(input_df) * validation_percentage) / 100)
+    input_row_len = len(input_df)
+    first_val_row = input_row_len - rows_in_validation_set
+    print('Validation percentage = ' + str(validation_percentage))
+    print('Rows in validation set = ' + str(rows_in_validation_set))
+    print('Total row count = ' + str(input_row_len))
+    print('Begin validation row = ' + str(first_val_row))
+    input_df = input_df.sort_values(by='Year')
+    input_df['Validation'] = False
+    input_df.iloc[first_val_row:input_row_len, len(input_df.columns.values) - 1] = True
+    return input_df
+
+
 arg_parser = argparse.ArgumentParser('Clean economic indicator data')
 arg_parser.add_argument('--file', help='the path to the original indicator csv file', required=True)
 arg_parser.add_argument('--output-col-name', help='output column to filter rows by', required=True)
@@ -141,6 +155,7 @@ arg_parser.add_argument('--desired-consecutive-years', help='The number of conse
                         required=True)
 arg_parser.add_argument('--null-handling-mode', help='How null should be handled (DROP, IMPUTE, IGNORE)', required=True)
 arg_parser.add_argument('--output-file-name', help='Output file for cleaned CSV', required=True)
+arg_parser.add_argument('--percent-in-validation', help='Percent of observations in validation set', required=True)
 args = arg_parser.parse_args()
 args = vars(args)
 
@@ -151,6 +166,7 @@ param_min_observations = int(args['min_observations']) #10
 param_desired_consecutive_years = int(args['desired_consecutive_years']) #10
 param_null_handling_mode = args['null_handling_mode'] #'IMPUTE' #one of DROP, IMPUTE, IGNORE
 param_output_file_name = args['output_file_name'] #'cleaned-econ-data.csv'
+param_percent_in_validation = int(args['percent_in_validation'])
 
 result_df = get_raw_data_frame(param_file_name)
 result_df = prune_results_by_target(result_df, param_output_col_name, param_output_next_suffix, param_min_observations,
@@ -161,4 +177,5 @@ result_df = get_countries_with_overlapping_consecutive_years(result_df, param_de
 if param_null_handling_mode == 'IMPUTE':
     result_df = impute_missing_data(result_df, param_min_observations)
 
+result_df = partition_validation_set(result_df, param_percent_in_validation)
 result_df.to_csv(param_output_file_name, index=False)
